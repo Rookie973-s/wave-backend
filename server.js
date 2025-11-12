@@ -11,16 +11,53 @@ dotenv.config();
 
 const app = express();
 
+// =================================================================
+// 🔒 --- CORS Configuration (UPDATED FOR GOOGLE SIGN-IN) ---
+// =================================================================
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        
+        // List of allowed origins
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:5500',
+            'http://127.0.0.1:5500',
+            'https://rookie973-s.github.io',
+            'https://accounts.google.com',
+            // Add your production domain here
+            // 'https://yourdomain.com'
+        ];
+        
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost')) {
+            callback(null, true);
+        } else {
+            console.log('Blocked origin:', origin);
+            callback(null, true); // Still allow for development, change to false in production
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400 // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
 // Middleware
 app.use(express.json()); // Body parser for JSON requests
-app.use(cors()); // Enable CORS for all origins
 
 // =================================================================
 // 💾 --- Connect to MongoDB ---
 // =================================================================
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB connected'))
-    .catch(err => console.error('MongoDB connection error:', err));
+    .then(() => console.log('✅ MongoDB connected'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // =================================================================
 // 📝 --- Comment Schema and Model ---
@@ -44,11 +81,12 @@ const replySchema = new mongoose.Schema({
 const commentSchema = new mongoose.Schema({
     contentId: {
         type: String,
-        required: true
+        required: true,
+        index: true // Added index for better query performance
     },
     email: {
         type: String,
-        required: false, // Assuming email is optional or handled by the client prompt
+        required: false,
         default: 'Guest'
     },
     text: {
@@ -64,6 +102,23 @@ const commentSchema = new mongoose.Schema({
 
 const Comment = mongoose.model('Comment', commentSchema);
 
+// =================================================================
+// 🛡️ --- Security Headers Middleware ---
+// =================================================================
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+});
+
+// =================================================================
+// 📊 --- Logging Middleware (Optional but helpful) ---
+// =================================================================
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    next();
+});
 
 // =================================================================
 // 🛣️ --- Routes ---
@@ -71,13 +126,29 @@ const Comment = mongoose.model('Comment', commentSchema);
 
 // Root route for testing
 app.get('/', (req, res) => {
-    res.json({ message: 'Wave Backend API is running!' });
+    res.json({ 
+        message: 'Wave Backend API is running!',
+        version: '1.0.0',
+        endpoints: {
+            'GET /:contentId': 'Get comments for content',
+            'POST /': 'Create new comment',
+            'DELETE /:commentId': 'Delete comment',
+            'POST /reply': 'Add reply to comment',
+            'DELETE /reply/:commentId/:replyId': 'Delete reply'
+        }
+    });
 });
 
 // GET: Get all comments for a specific content ID
 app.get('/:contentId', async (req, res) => {
     try {
-        const comments = await Comment.find({ contentId: req.params.contentId }).sort({ date: -1 });
+        const { contentId } = req.params;
+        
+        if (!contentId) {
+            return res.status(400).json({ error: 'Content ID is required.' });
+        }
+
+        const comments = await Comment.find({ contentId }).sort({ date: -1 });
         res.json(comments);
     } catch (err) {
         console.error('Error fetching comments:', err.message);
@@ -90,14 +161,32 @@ app.post('/', async (req, res) => {
     try {
         const { contentId, email, text } = req.body;
 
+        // Validation
         if (!contentId || !text) {
-            return res.status(400).json({ error: 'Missing contentId or text in request body.' });
+            return res.status(400).json({ 
+                error: 'Missing required fields.',
+                required: ['contentId', 'text']
+            });
         }
 
-        const newComment = new Comment({ contentId, email, text });
+        if (text.trim().length === 0) {
+            return res.status(400).json({ error: 'Comment text cannot be empty.' });
+        }
+
+        if (text.length > 1000) {
+            return res.status(400).json({ error: 'Comment text too long (max 1000 characters).' });
+        }
+
+        const newComment = new Comment({ 
+            contentId, 
+            email: email || 'Guest', 
+            text: text.trim() 
+        });
+        
         await newComment.save();
 
-        res.status(201).json(newComment); // Use 201 for resource creation
+        console.log(`✅ New comment created for ${contentId} by ${email || 'Guest'}`);
+        res.status(201).json(newComment);
 
     } catch (err) {
         console.error('Error posting comment:', err.message);
@@ -108,32 +197,53 @@ app.post('/', async (req, res) => {
 // DELETE: Delete a comment by ID
 app.delete('/:commentId', async (req, res) => {
     try {
-        // Note: In a real application, you'd add authentication/authorization here
-        // to ensure only the owner or an admin can delete the comment.
+        const { commentId } = req.params;
 
-        const result = await Comment.findByIdAndDelete(req.params.commentId);
+        // In production, add authentication check here:
+        // const userEmail = req.headers['x-user-email'];
+        // Verify the user owns this comment before deleting
+
+        const result = await Comment.findByIdAndDelete(commentId);
 
         if (!result) {
-            return res.status(404).json({ error: 'Comment not found with the provided ID.' });
+            return res.status(404).json({ error: 'Comment not found.' });
         }
 
-        res.json({ message: 'Comment deleted successfully', deletedComment: result });
+        console.log(`🗑️ Comment deleted: ${commentId}`);
+        res.json({ 
+            message: 'Comment deleted successfully', 
+            deletedComment: result 
+        });
     } catch (err) {
         console.error('Error deleting comment:', err.message);
-        // Check for invalid ID format (CastError)
+        
         if (err.name === 'CastError') {
             return res.status(400).json({ error: 'Invalid comment ID format.' });
         }
+        
         res.status(500).json({ error: 'Server error deleting comment.' });
     }
 });
+
 // POST: Add a reply to a comment
 app.post('/reply', async (req, res) => {
     try {
         const { contentId, parentCommentId, email, text } = req.body;
 
+        // Validation
         if (!contentId || !parentCommentId || !text) {
-            return res.status(400).json({ error: 'Missing required fields in request body.' });
+            return res.status(400).json({ 
+                error: 'Missing required fields.',
+                required: ['contentId', 'parentCommentId', 'text']
+            });
+        }
+
+        if (text.trim().length === 0) {
+            return res.status(400).json({ error: 'Reply text cannot be empty.' });
+        }
+
+        if (text.length > 500) {
+            return res.status(400).json({ error: 'Reply text too long (max 500 characters).' });
         }
 
         const comment = await Comment.findById(parentCommentId);
@@ -144,17 +254,23 @@ app.post('/reply', async (req, res) => {
 
         const newReply = {
             email: email || 'Guest',
-            text,
+            text: text.trim(),
             date: new Date()
         };
 
         comment.replies.push(newReply);
         await comment.save();
 
+        console.log(`💬 Reply added to comment ${parentCommentId} by ${email || 'Guest'}`);
         res.status(201).json(comment);
 
     } catch (err) {
         console.error('Error posting reply:', err.message);
+        
+        if (err.name === 'CastError') {
+            return res.status(400).json({ error: 'Invalid comment ID format.' });
+        }
+        
         res.status(500).json({ error: 'Server error posting reply.' });
     }
 });
@@ -179,18 +295,51 @@ app.delete('/reply/:commentId/:replyId', async (req, res) => {
         comment.replies.splice(replyIndex, 1);
         await comment.save();
 
-        res.json({ message: 'Reply deleted successfully', comment });
+        console.log(`🗑️ Reply deleted from comment ${commentId}`);
+        res.json({ 
+            message: 'Reply deleted successfully', 
+            comment 
+        });
 
     } catch (err) {
         console.error('Error deleting reply:', err.message);
+        
         if (err.name === 'CastError') {
             return res.status(400).json({ error: 'Invalid ID format.' });
         }
+        
         res.status(500).json({ error: 'Server error deleting reply.' });
     }
 });
+
+// =================================================================
+// 🚫 --- 404 Handler ---
+// =================================================================
+app.use((req, res) => {
+    res.status(404).json({ 
+        error: 'Endpoint not found',
+        path: req.path,
+        method: req.method
+    });
+});
+
+// =================================================================
+// ⚠️ --- Global Error Handler ---
+// =================================================================
+app.use((err, req, res, next) => {
+    console.error('Global error handler:', err);
+    res.status(500).json({ 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+});
+
 // =================================================================
 // 🚀 --- Start Server ---
 // =================================================================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 CORS enabled for multiple origins`);
+});

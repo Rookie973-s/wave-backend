@@ -75,7 +75,15 @@ app.post('/comment', async (req, res) => {
     // Logic to create a new comment
 });
 */
-
+app.get('/:contentId', async (req, res) => {
+    try {
+        const comments = await Comment.find({ contentId: req.params.contentId }).sort({ date: -1 });
+        res.json(comments);
+    } catch (err) {
+        console.error('Error fetching comments:', err.message);
+        res.status(500).json({ error: 'Server error fetching comments.' });
+    }
+});
 // [ ... Assume all previous route definitions are here ... ]
 
 // =================================================================
@@ -108,3 +116,4 @@ app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     // console.log(`📍 Environment: ${process.env... (Truncated in snippet)
 });
+

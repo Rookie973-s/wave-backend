@@ -25,6 +25,22 @@ mongoose.connect(process.env.MONGO_URI)
 // =================================================================
 // 📝 --- Comment Schema and Model ---
 // =================================================================
+const replySchema = new mongoose.Schema({
+    email: {
+        type: String,
+        required: false,
+        default: 'Guest'
+    },
+    text: {
+        type: String,
+        required: true
+    },
+    date: {
+        type: Date,
+        default: Date.now
+    }
+});
+
 const commentSchema = new mongoose.Schema({
     contentId: {
         type: String,
@@ -42,10 +58,12 @@ const commentSchema = new mongoose.Schema({
     date: {
         type: Date,
         default: Date.now
-    }
+    },
+    replies: [replySchema]
 });
 
 const Comment = mongoose.model('Comment', commentSchema);
+
 
 // =================================================================
 // 🛣️ --- Routes ---
@@ -109,7 +127,68 @@ app.delete('/:commentId', async (req, res) => {
         res.status(500).json({ error: 'Server error deleting comment.' });
     }
 });
+// POST: Add a reply to a comment
+app.post('/reply', async (req, res) => {
+    try {
+        const { contentId, parentCommentId, email, text } = req.body;
 
+        if (!contentId || !parentCommentId || !text) {
+            return res.status(400).json({ error: 'Missing required fields in request body.' });
+        }
+
+        const comment = await Comment.findById(parentCommentId);
+        
+        if (!comment) {
+            return res.status(404).json({ error: 'Parent comment not found.' });
+        }
+
+        const newReply = {
+            email: email || 'Guest',
+            text,
+            date: new Date()
+        };
+
+        comment.replies.push(newReply);
+        await comment.save();
+
+        res.status(201).json(comment);
+
+    } catch (err) {
+        console.error('Error posting reply:', err.message);
+        res.status(500).json({ error: 'Server error posting reply.' });
+    }
+});
+
+// DELETE: Delete a reply from a comment
+app.delete('/reply/:commentId/:replyId', async (req, res) => {
+    try {
+        const { commentId, replyId } = req.params;
+
+        const comment = await Comment.findById(commentId);
+        
+        if (!comment) {
+            return res.status(404).json({ error: 'Comment not found.' });
+        }
+
+        const replyIndex = comment.replies.findIndex(r => r._id.toString() === replyId);
+        
+        if (replyIndex === -1) {
+            return res.status(404).json({ error: 'Reply not found.' });
+        }
+
+        comment.replies.splice(replyIndex, 1);
+        await comment.save();
+
+        res.json({ message: 'Reply deleted successfully', comment });
+
+    } catch (err) {
+        console.error('Error deleting reply:', err.message);
+        if (err.name === 'CastError') {
+            return res.status(400).json({ error: 'Invalid ID format.' });
+        }
+        res.status(500).json({ error: 'Server error deleting reply.' });
+    }
+});
 // =================================================================
 // 🚀 --- Start Server ---
 // =================================================================

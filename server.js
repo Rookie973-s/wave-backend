@@ -27,6 +27,8 @@ const corsOptions = {
             'https://rookie973-s.github.io',
             'https://accounts.google.com',
             'https://rotwave.vercel.app',
+            'https://wave-backend-umi8.onrender.com',
+            'https://wave-backend-umi8.onrender.com/comments',
         ];
         
         if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost')) {
@@ -281,3 +283,4 @@ process.on('SIGINT', async () => {
     console.log('✅ MongoDB connection closed');
     process.exit(0);
 });
+

@@ -27,8 +27,6 @@ const corsOptions = {
             'https://rookie973-s.github.io',
             'https://accounts.google.com',
             'https://rotwave.vercel.app',
-            'https://wave-backend-umi8.onrender.com',
-            'https://wave-backend-umi8.onrender.com/comments',
         ];
         
         if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost')) {
@@ -48,7 +46,7 @@ app.use(express.json());
 // =================================================================
 // 🗄️ --- MongoDB Connection ---
 // =================================================================
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=maojority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI ||'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=maojority&appName=Cluster0';
 
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('✅ MongoDB connected successfully'))
@@ -283,5 +281,3 @@ process.on('SIGINT', async () => {
     console.log('✅ MongoDB connection closed');
     process.exit(0);
 });
-
-

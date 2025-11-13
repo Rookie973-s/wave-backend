@@ -48,7 +48,7 @@ app.use(express.json());
 // =================================================================
 // 🗄️ --- MongoDB Connection ---
 // =================================================================
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=ma0jority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=maojority&appName=Cluster0';
 
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('✅ MongoDB connected successfully'))
@@ -283,4 +283,5 @@ process.on('SIGINT', async () => {
     console.log('✅ MongoDB connection closed');
     process.exit(0);
 });
+
 

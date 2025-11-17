@@ -1,3 +1,4 @@
+
 // =================================================================
 // ⚙️ --- Basic Setup and Middleware ---
 // =================================================================
@@ -49,7 +50,7 @@ app.use(express.json());
 // 🗄️ --- MongoDB Connection ---
 // =================================================================
 // FIX: Corrected 'ma0jority' to 'majority' in the connection string
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('✅ MongoDB connected successfully'))
@@ -252,5 +253,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
-
 

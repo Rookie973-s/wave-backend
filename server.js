@@ -27,13 +27,15 @@ const corsOptions = {
             'https://rookie973-s.github.io',
             'https://accounts.google.com',
             'https://rotwave.vercel.app',
+            'https://wave-backend-umi8.onrender.com',
         ];
         
+        // Check if origin is allowed
         if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost')) {
             callback(null, true);
         } else {
             console.log('Blocked origin:', origin);
-            callback(null, true); // Allow all for now (change to false in production)
+            callback(null, true); // Allow all for debugging (set to false in strict production)
         }
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
@@ -46,13 +48,14 @@ app.use(express.json());
 // =================================================================
 // 🗄️ --- MongoDB Connection ---
 // =================================================================
-const MONGODB_URI = process.env.MONGODB_URI ||'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=maojority&appName=Cluster0';
+// FIX: Corrected 'ma0jority' to 'majority' in the connection string
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('✅ MongoDB connected successfully'))
     .catch(err => {
         console.error('❌ MongoDB connection error:', err);
-        process.exit(1);
+        process.exit(1); // Exit process with failure
     });
 
 // =================================================================
@@ -85,13 +88,8 @@ const Comment = mongoose.model('Comment', commentSchema);
 app.get('/', (req, res) => {
     res.json({ 
         message: 'ROTWAVE Comments API is running!',
-        version: '1.0.0',
-        endpoints: {
-            'GET /comments/:contentId': 'Get all comments for content',
-            'POST /comments': 'Create a new comment',
-            'DELETE /comments/:commentId': 'Delete a comment',
-            'POST /comments/reply': 'Add a reply to a comment'
-        }
+        version: '1.0.1',
+        status: 'healthy'
     });
 });
 
@@ -159,24 +157,24 @@ app.post('/comments/reply', async (req, res) => {
     try {
         const { contentId, parentCommentId, email, text } = req.body;
         
-        console.log(`💬 Adding reply to comment: ${parentCommentId}`);
+        console.log(`💬 Adding reply to parentCommentId: ${parentCommentId}`);
         
         // Validation
         if (!parentCommentId || !email || !text) {
-            return res.status(400).json({ 
-                error: 'Missing required fields',
-                required: ['parentCommentId', 'email', 'text']
-            });
+            return res.status(400).json({ error: 'Missing required fields' });
         }
-        
-        if (text.trim().length === 0) {
-            return res.status(400).json({ error: 'Reply text cannot be empty' });
+
+        // FIX: Check if ID is a valid MongoDB ObjectId to prevent 500 CastError
+        if (!mongoose.Types.ObjectId.isValid(parentCommentId)) {
+            console.error(`❌ Invalid Parent Comment ID format: ${parentCommentId}`);
+            return res.status(400).json({ error: 'Invalid parent comment ID format' });
         }
         
         // Find the parent comment
         const comment = await Comment.findById(parentCommentId);
         
         if (!comment) {
+            console.error(`❌ Parent comment not found: ${parentCommentId}`);
             return res.status(404).json({ error: 'Parent comment not found' });
         }
         
@@ -206,11 +204,18 @@ app.delete('/comments/:commentId', async (req, res) => {
     try {
         const { commentId } = req.params;
         
-        console.log(`🗑️ Deleting comment: ${commentId}`);
+        console.log(`🗑️ Request to delete comment: ${commentId}`);
+
+        // FIX: Check validity of ID to prevent 500 CastError
+        if (!mongoose.Types.ObjectId.isValid(commentId)) {
+            console.error(`❌ Invalid Comment ID format: ${commentId}`);
+            return res.status(400).json({ error: 'Invalid comment ID format' });
+        }
         
         const deletedComment = await Comment.findByIdAndDelete(commentId);
         
         if (!deletedComment) {
+            console.error(`❌ Comment not found for deletion: ${commentId}`);
             return res.status(404).json({ error: 'Comment not found' });
         }
         
@@ -235,26 +240,7 @@ app.use((req, res) => {
     console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
     res.status(404).json({ 
         error: 'Endpoint not found',
-        path: req.path,
-        method: req.method,
-        availableEndpoints: {
-            'GET /': 'API info',
-            'GET /comments/:contentId': 'Get comments',
-            'POST /comments': 'Create comment',
-            'DELETE /comments/:commentId': 'Delete comment',
-            'POST /comments/reply': 'Add reply'
-        }
-    });
-});
-
-// =================================================================
-// ⚠️ --- Global Error Handler ---
-// =================================================================
-app.use((err, req, res, next) => {
-    console.error('❌ Global error handler:', err);
-    res.status(500).json({ 
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+        path: req.path
     });
 });
 
@@ -264,20 +250,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-    console.log(`
-╔════════════════════════════════════════════╗
-║  🚀 ROTWAVE Comments API Server Running   ║
-║  📍 Port: ${PORT}                           ║
-║  🗄️  MongoDB: Connected                    ║
-║  🌐 CORS: Enabled                          ║
-╚════════════════════════════════════════════╝
-    `);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
 
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Shutting down gracefully...');
-    await mongoose.connection.close();
-    console.log('✅ MongoDB connection closed');
-    process.exit(0);
-});

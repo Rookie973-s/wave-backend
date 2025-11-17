@@ -6,7 +6,7 @@
 # MongoDB Connection String
 # Get this from MongoDB Atlas: https://cloud.mongodb.com/
 # Format: mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority
-MONGODB_URI=mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=ma0jority&appName=Cluster0
+MONGODB_URI=mongodb+srv://RookieWI:Rich1234@cluster0.bp6qycl.mongodb.net/?retryWrites=true&w=maojority&appName=Cluster0
 
 # Server Port (default: 5000)
 PORT=5000
